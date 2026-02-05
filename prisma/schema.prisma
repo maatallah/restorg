@@ -1,0 +1,331 @@
+// Last-Updated: 2026-02-04 13:07
+// Purpose: Schéma Prisma aligné sur DATA_MODEL.md (MVP).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  CASHIER
+}
+
+enum OrderChannel {
+  ON_SITE
+  TAKEAWAY
+  DELIVERY
+}
+
+enum OrderStatus {
+  CREATED
+  IN_PREP
+  READY
+  COMPLETED
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  ONLINE
+  TICKET_RESTAURANT
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model Restaurant {
+  id        String   @id @default(uuid())
+  name      String
+  status    RestaurantStatus
+  createdAt DateTime @default(now()) @map("created_at")
+
+  users            User[]
+  menus            Menu[]
+  menuCategories   MenuCategory[]
+  menuItems        MenuItem[]
+  optionGroups     OptionGroup[]
+  optionItems      OptionItem[]
+  orders           Order[]
+  orderItems       OrderItem[]
+  orderItemOptions OrderItemOption[]
+  kitchenStations  KitchenStation[]
+  itemStationRules ItemStationRule[]
+  payments         Payment[]
+  auditLogs        AuditLog[]
+  pricingRule      PricingRule?
+  deliveryDetails  DeliveryDetail[]
+
+  @@map("restaurants")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  auditLogs  AuditLog[]
+
+  @@index([restaurantId])
+  @@map("users")
+}
+
+model Menu {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  name         String
+  isActive     Boolean  @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  restaurant     Restaurant    @relation(fields: [restaurantId], references: [id])
+  menuCategories MenuCategory[]
+
+  @@index([restaurantId])
+  @@map("menus")
+}
+
+model MenuCategory {
+  id           String  @id @default(uuid())
+  restaurantId String  @map("restaurant_id")
+  menuId       String  @map("menu_id")
+  name         String
+  position     Int
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  menu       Menu       @relation(fields: [menuId], references: [id])
+  items      MenuItem[]
+
+  @@index([restaurantId])
+  @@index([menuId])
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id           String   @id @default(uuid())
+  restaurantId String   @map("restaurant_id")
+  categoryId   String   @map("category_id")
+  name         String
+  description  String
+  priceCents   Int      @map("price_cents")
+  isAvailable  Boolean  @map("is_available")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  restaurant        Restaurant        @relation(fields: [restaurantId], references: [id])
+  category          MenuCategory      @relation(fields: [categoryId], references: [id])
+  optionGroups      OptionGroup[]
+  orderItems        OrderItem[]
+  itemStationRules  ItemStationRule[]
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@map("menu_items")
+}
+
+model OptionGroup {
+  id           String @id @default(uuid())
+  restaurantId String @map("restaurant_id")
+  itemId       String @map("item_id")
+  name         String
+  minSelect    Int    @map("min_select")
+  maxSelect    Int    @map("max_select")
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  item       MenuItem    @relation(fields: [itemId], references: [id])
+  options    OptionItem[]
+
+  @@index([restaurantId])
+  @@index([itemId])
+  @@map("option_groups")
+}
+
+model OptionItem {
+  id           String  @id @default(uuid())
+  restaurantId String  @map("restaurant_id")
+  groupId      String  @map("group_id")
+  name         String
+  priceCents   Int     @map("price_cents")
+  isAvailable  Boolean @map("is_available")
+
+  restaurant        Restaurant        @relation(fields: [restaurantId], references: [id])
+  group             OptionGroup       @relation(fields: [groupId], references: [id])
+  orderItemOptions  OrderItemOption[]
+
+  @@index([restaurantId])
+  @@index([groupId])
+  @@map("option_items")
+}
+
+model Order {
+  id           String       @id @default(uuid())
+  restaurantId String       @map("restaurant_id")
+  orderNumber  String       @map("order_number")
+  channel      OrderChannel
+  status       OrderStatus
+  tableNumber  String?      @map("table_number")
+  customerName String?      @map("customer_name")
+  totalCents   Int          @map("total_cents")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  items      OrderItem[]
+  payments   Payment[]
+  delivery   DeliveryDetail?
+
+  @@unique([restaurantId, orderNumber])
+  @@index([restaurantId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String  @id @default(uuid())
+  restaurantId  String  @map("restaurant_id")
+  orderId       String  @map("order_id")
+  itemId        String  @map("item_id")
+  quantity      Int
+  unitPriceCents Int    @map("unit_price_cents")
+  notes         String?
+
+  restaurant       Restaurant        @relation(fields: [restaurantId], references: [id])
+  order            Order             @relation(fields: [orderId], references: [id])
+  item             MenuItem          @relation(fields: [itemId], references: [id])
+  options          OrderItemOption[]
+
+  @@index([restaurantId])
+  @@index([orderId])
+  @@index([itemId])
+  @@map("order_items")
+}
+
+model OrderItemOption {
+  id            String @id @default(uuid())
+  restaurantId  String @map("restaurant_id")
+  orderItemId   String @map("order_item_id")
+  optionItemId  String @map("option_item_id")
+  priceCents    Int    @map("price_cents")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  orderItem  OrderItem  @relation(fields: [orderItemId], references: [id])
+  optionItem OptionItem @relation(fields: [optionItemId], references: [id])
+
+  @@index([restaurantId])
+  @@index([orderItemId])
+  @@index([optionItemId])
+  @@map("order_item_options")
+}
+
+model KitchenStation {
+  id           String @id @default(uuid())
+  restaurantId String @map("restaurant_id")
+  name         String
+  role         String
+
+  restaurant Restaurant       @relation(fields: [restaurantId], references: [id])
+  rules      ItemStationRule[]
+
+  @@index([restaurantId])
+  @@map("kitchen_stations")
+}
+
+model ItemStationRule {
+  id           String @id @default(uuid())
+  restaurantId String @map("restaurant_id")
+  itemId       String @map("item_id")
+  stationId    String @map("station_id")
+
+  restaurant Restaurant    @relation(fields: [restaurantId], references: [id])
+  item       MenuItem      @relation(fields: [itemId], references: [id])
+  station    KitchenStation @relation(fields: [stationId], references: [id])
+
+  @@index([restaurantId])
+  @@index([itemId])
+  @@index([stationId])
+  @@map("item_station_rules")
+}
+
+model Payment {
+  id           String        @id @default(uuid())
+  restaurantId String        @map("restaurant_id")
+  orderId      String        @map("order_id")
+  method       PaymentMethod
+  status       PaymentStatus
+  amountCents  Int           @map("amount_cents")
+  currency     String        @default("TND")
+  providerRef  String?       @map("provider_ref")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  order      Order      @relation(fields: [orderId], references: [id])
+
+  @@index([restaurantId])
+  @@index([orderId])
+  @@map("payments")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  restaurantId String  @map("restaurant_id")
+  actorUserId String  @map("actor_user_id")
+  action      String
+  entityType  String  @map("entity_type")
+  entityId    String  @map("entity_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  actorUser  User       @relation(fields: [actorUserId], references: [id])
+
+  @@index([restaurantId])
+  @@index([actorUserId])
+  @@map("audit_logs")
+}
+
+model PricingRule {
+  id           String   @id @default(uuid())
+  restaurantId String   @unique @map("restaurant_id")
+  taxRate      Decimal  @map("tax_rate")
+  discountRate Decimal  @map("discount_rate")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@map("pricing_rules")
+}
+
+model DeliveryDetail {
+  id             String   @id @default(uuid())
+  orderId        String   @unique @map("order_id")
+  restaurantId   String   @map("restaurant_id")
+  customerPhone  String   @map("customer_phone")
+  addressLine1   String   @map("address_line1")
+  addressLine2   String?  @map("address_line2")
+  city           String
+  notes          String?
+  deliveryWindow String?  @map("delivery_window")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  order       Order      @relation(fields: [orderId], references: [id])
+  restaurant  Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@map("delivery_details")
+}
