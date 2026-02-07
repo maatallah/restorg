@@ -1,6 +1,6 @@
 # Stabilization Summary (Phase 1)
 
-Last-Updated: 2026-02-05 14:45
+Last-Updated: 2026-02-07 09:01
 Purpose: Summary of stabilization changes and verification status.
 
 ## What Changed
@@ -22,6 +22,7 @@ Purpose: Summary of stabilization changes and verification status.
 
 ## Open Items
 - Confirm default currency for payments (currently `TND`).
+- Branch protection deferred (to be configured in GitHub later).
 
 ## Currency & Compliance (Deferred)
 - Current mode is **TND-only** until regulatory validation is complete.
